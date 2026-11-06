@@ -1,0 +1,17 @@
+{
+  "name": "Froschsprung",
+  "short_name": "Froschsprung",
+  "description": "Hilf dem kleinen Frosch über Straße und Fluss bis in die fünf Zielfelder.",
+  "lang": "de",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a1330",
+  "theme_color": "#0a1330",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

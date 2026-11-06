@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Froschsprung – Pixelhafen</title>
+<meta name="description" content="Hilf dem kleinen Frosch über die Straße und den Fluss bis in die Zielfelder. Kostenlos, ohne Anmeldung, ohne Werbung.">
+<!-- App-Einstellungen, damit sich das Spiel auf dem Handy wie eine App verhält -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0a1330">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Froschsprung">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<style>
+  /* Schrift "Press Start 2P", Copyright 2012 The Press Start 2P Project Authors,
+     SIL Open Font License 1.1 (https://openfontlicense.org). Sie steckt direkt in dieser
+     Datei, damit das Spiel auch offline richtig aussieht. */
+  @font-face {
+    font-family: 'Press Start 2P';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url(%%SCHRIFT%%) format('woff2');
+  }
+
+  /* Froschsprung ist immer dunkelblau: Pixelhafen-Gold als warme Akzentfarbe, dazu Grün und Türkis */
+  :root {
+    color-scheme: dark;
+    --bg: #0a1330;
+    --surface: #101d45;
+    --surface-2: #182a5c;
+    --line: #2b4183;
+    --text: #eef3ff;
+    --muted: #aab7da;
+    --accent: #f2b84b;
+    --accent-edge: #a9781f;
+    --on-accent: #1d1505;
+    --gruen: #6be04f;
+    --tuerkis: #2fd0c8;
+    --retro: 'Press Start 2P', 'Courier New', monospace;
+    --body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html { height: 100%; background: var(--bg); }
+  body {
+    min-height: 100%;
+    margin: 0;
+    color: var(--text);
+    background: var(--bg);
+    font: 16px/1.5 var(--body);
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+  [hidden] { display: none !important; }
+
+  /* Grundaufbau: Anzeige oben, Spielfeld in der Mitte, Steuerkreuz unten */
+  #app {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    grid-template-areas: "hud" "buehne" "hinweis" "steuer";
+    height: 100vh;
+    height: 100dvh;
+    min-height: 420px;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+
+  /* ---------- Anzeige ---------- */
+  #hud {
+    grid-area: hud;
+    display: flex;
+    align-items: center;
+    gap: clamp(8px, 2.6vw, 18px);
+    width: 100%;
+    max-width: 640px;
+    min-height: 54px;
+    margin: 0 auto;
+    padding: 4px 8px 4px 12px;
+  }
+  .wert { display: grid; flex: none; gap: 5px; min-width: 0; }
+  .wert small { color: var(--muted); font: 8px/1 var(--retro); white-space: nowrap; }
+  .wert b { font: 400 12px/1 var(--retro); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  #punkte { color: var(--accent); }
+  #lebenWert { display: flex; align-items: center; gap: 3px; color: var(--gruen); }
+  #lebenWert svg { width: 12px; height: 12px; flex: none; }
+  .knoepfchen { display: flex; flex: none; gap: 6px; margin-left: auto; }
+  .rund {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    color: var(--text);
+    cursor: pointer;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+  .rund:hover { background: var(--surface-2); }
+  .rund svg { width: 18px; height: 18px; }
+  #tonAus { display: none; }
+  .stumm #tonAn { display: none; }
+  .stumm #tonAus { display: block; }
+
+  /* ---------- Spielfeld ---------- */
+  #buehne {
+    grid-area: buehne;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    padding: 4px 8px;
+  }
+  #rahmen { position: relative; flex: none; line-height: 0; }
+  canvas#bild {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: #0d1a3d;
+    border-radius: 6px;
+    box-shadow: 0 0 0 2px var(--line), 0 10px 30px rgba(0, 0, 0, 0.45);
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    /* Nur hier und am Steuerkreuz: kein Scrollen, kein Zoomen beim Wischen */
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  canvas#bild:focus-visible { outline: 2px solid rgba(242, 184, 75, 0.6); outline-offset: 2px; }
+
+  #meldung {
+    position: absolute;
+    left: 50%;
+    top: 46%;
+    z-index: 2;
+    padding: 10px 14px;
+    color: #fff;
+    background: rgba(10, 19, 48, 0.88);
+    border: 2px solid var(--accent);
+    border-radius: 8px;
+    font: 12px/1.6 var(--retro);
+    text-align: center;
+    white-space: nowrap;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+  }
+  #meldung.gut { border-color: var(--gruen); }
+  #meldung.schlecht { border-color: #ff6b5b; }
+  #meldung small { display: block; color: var(--muted); font-size: 9px; }
+
+  #hinweis {
+    grid-area: hinweis;
+    margin: 0;
+    padding: 2px 12px 4px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.3;
+    text-align: center;
+  }
+  .nurTouch { display: none; }
+  .touch .nurTouch { display: inline; }
+  .touch .nurMaus { display: none; }
+
+  /* ---------- Steuerkreuz (nur bei Touch) ---------- */
+  #steuer {
+    grid-area: steuer;
+    display: none;
+    grid-template-columns: 1fr 1.5fr 1fr;
+    grid-template-rows: 62px 46px;
+    gap: 6px;
+    width: min(100%, 360px);
+    margin: 0 auto;
+    padding: 4px 10px 10px;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  .touch #steuer { display: grid; }
+  #steuer button {
+    display: grid;
+    place-items: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+    color: var(--text);
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: 0 3px 0 var(--line);
+    cursor: pointer;
+    touch-action: none;
+  }
+  #steuer button svg { width: 22px; height: 22px; }
+  #steuer button.gedrueckt, #steuer button:active { background: var(--line); transform: translateY(2px); box-shadow: 0 1px 0 var(--line); }
+  #steuer [data-richtung="hoch"] { grid-column: 2; grid-row: 1; color: var(--on-accent); background: var(--gruen); border-color: var(--gruen); box-shadow: 0 3px 0 #2f8f2a; }
+  #steuer [data-richtung="hoch"].gedrueckt { background: #57c43e; box-shadow: 0 1px 0 #2f8f2a; }
+  #steuer [data-richtung="runter"] { grid-column: 2; grid-row: 2; }
+  #steuer [data-richtung="links"] { grid-column: 1; grid-row: 1 / span 2; }
+  #steuer [data-richtung="rechts"] { grid-column: 3; grid-row: 1 / span 2; }
+
+  /* ---------- Fenster: Start, Pause, Ende ---------- */
+  #fenster {
+    position: fixed;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    overflow-y: auto;
+    background: rgba(6, 12, 32, 0.62);
+  }
+  .tafel {
+    width: min(400px, 100%);
+    margin: auto;
+    padding: 22px;
+    background: var(--surface);
+    border: 2px solid var(--line);
+    border-radius: 16px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  }
+  .marke { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; color: var(--muted); font: 9px/1.5 var(--retro); }
+  .marke svg { width: 22px; height: 22px; flex: none; color: var(--accent); }
+  .titelzeile { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  #startFrosch { flex: none; width: 64px; height: 64px; image-rendering: pixelated; }
+  h1, h2 { margin: 0; font: 400 clamp(17px, 5.6vw, 23px)/1.3 var(--retro); letter-spacing: -0.02em; }
+  h1 { color: var(--gruen); text-shadow: 0 3px 0 #1f5c1a; }
+  h2 { font-size: clamp(16px, 5vw, 20px); }
+  .unterzeile { margin: 12px 0 0; color: var(--text); }
+  .steuerinfo { margin: 12px 0 0; padding: 10px 12px; color: var(--muted); background: var(--surface-2); border-radius: 10px; font-size: 14px; line-height: 1.45; }
+  .steuerinfo b { color: var(--text); }
+  .rekord { margin: 14px 0 0; color: var(--muted); font: 10px/1.6 var(--retro); }
+  .rekord b { color: var(--accent); font-weight: 400; }
+  .zahlen { display: grid; gap: 8px; margin: 16px 0 0; padding: 0; }
+  .zahlen div { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  .zahlen dt { color: var(--muted); }
+  .zahlen dd { margin: 0; font: 13px/1.4 var(--retro); }
+  .hervor {
+    margin: 14px 0 0;
+    padding: 10px 12px;
+    color: var(--on-accent);
+    background: var(--accent);
+    border-radius: 8px;
+    font: 11px/1.6 var(--retro);
+    text-align: center;
+    animation: blinken 0.9s steps(2, start) 4;
+  }
+  @keyframes blinken { 50% { filter: brightness(1.35); } }
+  .knoepfe { display: grid; gap: 10px; margin-top: 18px; }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    padding: 10px 18px;
+    color: var(--text);
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: 0 3px 0 var(--line);
+    font: 600 16px/1.3 var(--body);
+    text-align: center;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .btn:hover { filter: brightness(1.1); }
+  .btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--line); }
+  .btn.main { color: var(--on-accent); background: var(--accent); border-color: var(--accent); box-shadow: 0 3px 0 var(--accent-edge); font-size: 18px; font-weight: 800; letter-spacing: 0.02em; }
+  .btn.main:active { box-shadow: 0 1px 0 var(--accent-edge); }
+
+  /* ---------- Großer Bildschirm: Anzeige etwas größer ---------- */
+  @media (min-width: 900px) and (min-height: 700px) {
+    #hud { max-width: 720px; min-height: 64px; }
+    .wert small { font-size: 9px; }
+    .wert b { font-size: 15px; }
+    #lebenWert svg { width: 15px; height: 15px; }
+    #hinweis { font-size: 14px; }
+  }
+
+  /* ---------- Schmale Geräte ---------- */
+  @media (max-width: 380px) {
+    #hud { gap: 8px; padding-left: 8px; padding-right: 6px; }
+    .wert b { font-size: 10px; }
+    .wert small { font-size: 7px; }
+    .knoepfchen { gap: 4px; }
+    .tafel { padding: 18px; }
+  }
+  /* Sehr niedrige Hochformat-Fenster: Steuerkreuz flacher */
+  @media (max-height: 620px) and (orientation: portrait) {
+    #steuer { grid-template-rows: 52px 44px; padding-bottom: 6px; }
+    #hinweis { display: none; }
+  }
+
+  /* ---------- Querformat auf dem Handy: Anzeige links, Steuerkreuz rechts ---------- */
+  @media (orientation: landscape) and (max-height: 560px) {
+    #app {
+      grid-template-rows: minmax(0, 1fr);
+      grid-template-columns: minmax(120px, 1fr) auto minmax(120px, 1fr);
+      grid-template-areas: "hud buehne steuer";
+      min-height: 280px;
+    }
+    #hud { flex-direction: column; align-items: flex-start; justify-content: center; gap: 10px; max-width: none; height: 100%; margin: 0; padding: 8px 6px 8px 14px; }
+    .knoepfchen { margin: 4px 0 0; }
+    #buehne { padding: 6px 4px; }
+    #hinweis { display: none; }
+    .touch #steuer { align-self: center; grid-template-columns: 52px 60px 52px; grid-template-rows: 62px 46px; width: auto; padding: 6px 14px 6px 6px; }
+    .tafel { width: min(560px, 100%); padding: 16px 20px; }
+    #fStart .marke { display: none; }
+    .steuerinfo { margin-top: 8px; padding: 8px 10px; }
+  }
+
+  /* ---------- Weniger Bewegung gewünscht ---------- */
+  @media (prefers-reduced-motion: reduce) {
+    .btn:active, #steuer button:active, #steuer button.gedrueckt { transform: none; }
+    .hervor { animation: none; }
+  }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="logo" viewBox="0 0 11 11"><path fill="currentColor" d="M1 1h3v1H1zM7 1h3v1H7zM0 2h11v1H0zM0 3h11v4H0zM1 7h9v1H1zM0 8h3v2H0zM8 8h3v2H8zM4 8h3v1H4z"/></symbol>
+  <symbol id="froschIcon" viewBox="0 0 12 12"><path fill="currentColor" d="M2 1h3v2H2zM7 1h3v2H7zM1 3h10v5H1zM0 8h4v2H0zM8 8h4v2H8zM3 8h6v1H3z"/></symbol>
+  <symbol id="pfeil" viewBox="0 0 16 16"><path fill="currentColor" d="M7 2h2v1h1v1h1v1h1v1h1v2H10v6H6V8H3V6h1V5h1V4h1V3h1z"/></symbol>
+</svg>
+
+<div id="app">
+  <header id="hud">
+    <div class="wert"><small>PUNKTE</small><b id="punkte">0</b></div>
+    <div class="wert"><small>LEBEN</small><b id="lebenWert" aria-label="3 Leben"><svg aria-hidden="true"><use href="#froschIcon"/></svg><span id="leben">3</span></b></div>
+    <div class="wert"><small>LEVEL</small><b id="level">1</b></div>
+    <div class="wert"><small>FELDER</small><b id="felder">0</b></div>
+    <div class="wert"><small>REKORD</small><b id="rekord">0</b></div>
+    <div class="knoepfchen">
+      <button class="rund" id="tonKnopf" type="button" aria-label="Ton aus" aria-pressed="true">
+        <svg id="tonAn" viewBox="0 0 16 16" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true"><path d="M2 5h3v6H2zM6 4h1v8H6zM7 3h1v10H7zM10 6h1v4h-1zM12 4h1v8h-1z"/></svg>
+        <svg id="tonAus" viewBox="0 0 16 16" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true"><path d="M2 5h3v6H2zM6 4h1v8H6zM7 3h1v10H7zM10 6h1v1h-1zM11 7h1v1h-1zM12 8h1v1h-1zM13 9h1v1h-1zM13 6h1v1h-1zM12 7h1v1h-1zM11 8h1v1h-1zM10 9h1v1h-1z"/></svg>
+      </button>
+      <button class="rund" id="pauseKnopf" type="button" aria-label="Pause">
+        <svg viewBox="0 0 16 16" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true"><path d="M4 3h3v10H4zM9 3h3v10H9z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="buehne">
+    <div id="rahmen">
+      <canvas id="bild" tabindex="0" role="img" aria-label="Spielfeld von Froschsprung: unten Straße, oben Fluss und fünf Zielfelder"></canvas>
+      <div id="meldung" role="status" aria-live="polite" hidden></div>
+    </div>
+  </main>
+
+  <p id="hinweis"><span class="nurMaus">Pfeiltasten oder WASD · P oder Esc = Pause</span><span class="nurTouch">Auf dem Spielfeld wischen oder Steuerkreuz tippen</span></p>
+
+  <div id="steuer" role="group" aria-label="Steuerkreuz">
+    <button type="button" data-richtung="hoch" aria-label="Nach oben hüpfen"><svg aria-hidden="true"><use href="#pfeil"/></svg></button>
+    <button type="button" data-richtung="links" aria-label="Nach links hüpfen"><svg aria-hidden="true" style="transform:rotate(-90deg)"><use href="#pfeil"/></svg></button>
+    <button type="button" data-richtung="rechts" aria-label="Nach rechts hüpfen"><svg aria-hidden="true" style="transform:rotate(90deg)"><use href="#pfeil"/></svg></button>
+    <button type="button" data-richtung="runter" aria-label="Nach unten hüpfen"><svg aria-hidden="true" style="transform:rotate(180deg)"><use href="#pfeil"/></svg></button>
+  </div>
+</div>
+
+<div id="fenster">
+  <div class="tafel" role="dialog" aria-modal="true" aria-labelledby="fensterTitel">
+
+    <section id="fStart">
+      <p class="marke"><svg aria-hidden="true"><use href="#logo"/></svg>PIXELHAFEN</p>
+      <div class="titelzeile">
+        <h1 data-titel>FROSCH&shy;SPRUNG</h1>
+        <canvas id="startFrosch" width="16" height="16" aria-hidden="true"></canvas>
+      </div>
+      <p class="unterzeile">Bring den kleinen Frosch über die Straße und den Fluss. Auf dem Wasser trägt ihn nur, was schwimmt: Baumstämme und Seerosen. Füll alle fünf Zielfelder!</p>
+      <p class="steuerinfo"><span class="nurMaus"><b>Pfeiltasten</b> oder <b>WASD</b> zum Hüpfen, <b>P</b> oder <b>Esc</b> für Pause.</span><span class="nurTouch"><b>Wischen</b> auf dem Spielfeld oder das <b>Steuerkreuz</b> unten benutzen.</span></p>
+      <p class="rekord">REKORD <b class="js-rekord">0</b></p>
+      <div class="knoepfe">
+        <button class="btn main" id="losKnopf" type="button">Loshüpfen</button>
+        <a class="btn" href="https://moje9328.github.io/spiele/">Zur Pixelhafen-Seite</a>
+      </div>
+    </section>
+
+    <section id="fPause" hidden>
+      <h2 data-titel>PAUSE</h2>
+      <p class="rekord">PUNKTE <b id="pausePunkte">0</b></p>
+      <div class="knoepfe">
+        <button class="btn main" id="weiterKnopf" type="button">Weiter</button>
+        <button class="btn" id="neuKnopf" type="button">Neu starten</button>
+      </div>
+    </section>
+
+    <section id="fEnde" hidden>
+      <h2 data-titel>SPIEL VORBEI</h2>
+      <p class="hervor" id="neuerRekord" hidden>NEUER HIGHSCORE!</p>
+      <dl class="zahlen">
+        <div><dt>Punkte</dt><dd id="ePunkte">0</dd></div>
+        <div><dt>Highscore</dt><dd id="eRekord">0</dd></div>
+        <div><dt>Level</dt><dd id="eLevel">1</dd></div>
+        <div><dt>Felder</dt><dd id="eFelder">0</dd></div>
+      </dl>
+      <div class="knoepfe">
+        <button class="btn main" id="nochmalKnopf" type="button">Noch einmal</button>
+        <a class="btn" href="https://moje9328.github.io/spiele/">Zur Pixelhafen-Seite</a>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<script>
+%%SPIEL%%
+</script>
+</body>
+</html>
